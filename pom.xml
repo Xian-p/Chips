@@ -12,6 +12,14 @@
     <name>Chips</name>
     <description>Password authentication plugin for Paper 1.21.11</description>
 
+    <!-- ADD THIS SECTION: Paper's Maven repository -->
+    <repositories>
+        <repository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+    </repositories>
+
     <!-- Dependencies -->
     <dependencies>
         <dependency>
@@ -64,4 +72,4 @@
         </plugins>
     </build>
 </project>
-                                        
+                                       
