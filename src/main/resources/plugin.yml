@@ -1,7 +1,7 @@
 name: Chips
 version: 1.1
 main: com.dola.chips.Chips
-api-version: "1.21"
+api-version: "1.21.11"
 
 commands:
   register:
