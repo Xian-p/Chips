@@ -1,8 +1,12 @@
-package me.yourname.chips;
+package me.chips;
 
-import org.bukkit.ChatColor;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
@@ -19,14 +23,19 @@ public class AuthListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler
+    private boolean shouldBlock(Player player) {
+        return !plugin.isLoggedIn(player.getUniqueId());
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        plugin.setLoggedIn(player.getUniqueId(), false);
+        plugin.setLoggedIn(player.getUniqueId(), false); // Always require login on join
+
         if (plugin.isRegistered(player.getUniqueId())) {
-            player.sendMessage(ChatColor.GOLD + "Please use /login <password>");
+            player.sendMessage(Component.text("Welcome back! Please /login <password>", NamedTextColor.GOLD));
         } else {
-            player.sendMessage(ChatColor.GOLD + "Please use /register <password> <confirm>");
+            player.sendMessage(Component.text("Welcome! Please /register <password> <confirm>", NamedTextColor.GOLD));
         }
     }
 
@@ -35,36 +44,37 @@ public class AuthListener implements Listener {
         plugin.removeSession(event.getPlayer().getUniqueId());
     }
 
-    private boolean shouldBlock(Player player) {
-        return !plugin.isLoggedIn(player.getUniqueId());
-    }
+    // --- Blockers ---
 
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         if (shouldBlock(event.getPlayer())) {
-            if (event.getFrom().getX() != event.getTo().getX() || 
-                event.getFrom().getZ() != event.getTo().getZ() || 
-                event.getFrom().getY() != event.getTo().getY()) {
-                event.setTo(event.getFrom());
+            Location from = event.getFrom();
+            Location to = event.getTo();
+            
+            // Allow rotating head (Yaw/Pitch) but prevent XYZ movement
+            if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
+                event.setTo(from);
             }
         }
     }
 
     @EventHandler
-    public void onChat(AsyncPlayerChatEvent event) {
+    public void onChat(AsyncChatEvent event) {
         if (shouldBlock(event.getPlayer())) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage(ChatColor.RED + "Login required.");
+            event.getPlayer().sendMessage(Component.text("Please login first!", NamedTextColor.RED));
         }
     }
 
     @EventHandler
-    public void onCommandPreprocess(PlayerCommandPreprocessEvent event) {
+    public void onCommand(PlayerCommandPreprocessEvent event) {
         if (shouldBlock(event.getPlayer())) {
             String msg = event.getMessage().toLowerCase();
-            if (!msg.startsWith("/login") && !msg.startsWith("/register")) {
+            // Whitelist specific commands
+            if (!msg.startsWith("/login") && !msg.startsWith("/register") && !msg.startsWith("/l") && !msg.startsWith("/reg")) {
                 event.setCancelled(true);
-                event.getPlayer().sendMessage(ChatColor.RED + "Login required.");
+                event.getPlayer().sendMessage(Component.text("Please login first!", NamedTextColor.RED));
             }
         }
     }
@@ -86,26 +96,26 @@ public class AuthListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (event.getWhoClicked() instanceof Player && shouldBlock((Player) event.getWhoClicked())) {
+        if (event.getWhoClicked() instanceof Player player && shouldBlock(player)) {
             event.setCancelled(true);
         }
     }
     
     @EventHandler
-    public void onDropItem(PlayerDropItemEvent event) {
+    public void onDrop(PlayerDropItemEvent event) {
         if (shouldBlock(event.getPlayer())) event.setCancelled(true);
     }
-    
+
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player && shouldBlock((Player) event.getEntity())) {
+        if (event.getEntity() instanceof Player player && shouldBlock(player)) {
             event.setCancelled(true);
         }
     }
-    
+
     @EventHandler
     public void onAttack(EntityDamageByEntityEvent event) {
-        if (event.getDamager() instanceof Player && shouldBlock((Player) event.getDamager())) {
+        if (event.getDamager() instanceof Player player && shouldBlock(player)) {
             event.setCancelled(true);
         }
     }
