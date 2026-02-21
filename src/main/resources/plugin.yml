@@ -1,28 +1,14 @@
 name: Chips
-version: 1.1
-main: com.dola.chips.Chips
-api-version: "1.21.11"
+version: 1.0
+main: me.yourname.chips.Chips
+api-version: 1.21
+authors: [YourName]
+description: Lightweight Auth Plugin
 
 commands:
   register:
-    description: Register a password for your account
-    usage: "/<command> <password> <confirmPassword>"
-
+    description: Register an account
+    usage: /register <password> <confirmPassword>
   login:
-    description: Log in with your password
-    usage: "/<command> <password>"
-
-  changepassword:
-    description: Change your existing password
-    usage: "/<command> <oldPassword> <newPassword> <confirmNewPassword>"
-
-  resetpassword:
-    description: Admin-only command to reset a player's password
-    usage: "/<command> <player> <newPassword>"
-    permission: chips.admin
-    permission-message: "You don't have permission to use this command."
-
-permissions:
-  chips.admin:
-    description: Access admin commands
-    default: op
+    description: Login to your account
+    usage: /login <password>
