@@ -15,6 +15,8 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.*;
 
+import java.util.UUID;
+
 public class AuthListener implements Listener {
 
     private final Chips plugin;
@@ -23,6 +25,96 @@ public class AuthListener implements Listener {
         this.plugin = plugin;
     }
 
+    // --- COMMAND INTERCEPTOR (Hides Passwords from Console) ---
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onCommandPreprocess(PlayerCommandPreprocessEvent event) {
+        String message = event.getMessage(); // e.g. "/login password"
+        String[] args = message.split(" ");
+        String cmd = args[0].toLowerCase(); // e.g. "/login"
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+
+        // 1. HANDLE LOGIN
+        if (cmd.equals("/login")) {
+            event.setCancelled(true); // Stop console logging
+
+            if (plugin.isLoggedIn(uuid)) {
+                player.sendMessage(Component.text("Already logged in.", NamedTextColor.RED));
+                return;
+            }
+            if (!plugin.isRegistered(uuid)) {
+                player.sendMessage(Component.text("Not registered! Use /register <password> <password>", NamedTextColor.RED));
+                return;
+            }
+            if (args.length != 2) { // /login + password = 2 parts
+                player.sendMessage(Component.text("Usage: /login <password>", NamedTextColor.RED));
+                return;
+            }
+            if (plugin.checkPassword(uuid, args[1])) {
+                plugin.setLoggedIn(uuid, true);
+                plugin.removeBlindness(player);
+                player.sendMessage(Component.text("Login successful!", NamedTextColor.GREEN));
+                plugin.getLogger().info(player.getName() + " logged in."); // Safe Console Log
+            } else {
+                player.sendMessage(Component.text("Incorrect password.", NamedTextColor.RED));
+            }
+        }
+
+        // 2. HANDLE REGISTER
+        else if (cmd.equals("/register")) {
+            event.setCancelled(true); // Stop console logging
+
+            if (plugin.isRegistered(uuid)) {
+                player.sendMessage(Component.text("Already registered! Use /login <password>", NamedTextColor.RED));
+                return;
+            }
+            if (args.length != 3) { // /register + pass + pass = 3 parts
+                player.sendMessage(Component.text("Usage: /register <password> <password>", NamedTextColor.RED));
+                return;
+            }
+            if (!args[1].equals(args[2])) {
+                player.sendMessage(Component.text("Passwords do not match.", NamedTextColor.RED));
+                return;
+            }
+            plugin.registerUser(uuid, args[1]);
+            plugin.setLoggedIn(uuid, true);
+            plugin.removeBlindness(player);
+            player.sendMessage(Component.text("Successfully registered & logged in!", NamedTextColor.GREEN));
+            plugin.getLogger().info(player.getName() + " registered."); // Safe Console Log
+        }
+
+        // 3. HANDLE CHANGE PASSWORD
+        else if (cmd.equals("/changepassword")) {
+            event.setCancelled(true); // Stop console logging
+
+            if (!plugin.isLoggedIn(uuid)) {
+                player.sendMessage(Component.text("You must be logged in.", NamedTextColor.RED));
+                return;
+            }
+            if (args.length != 3) {
+                player.sendMessage(Component.text("Usage: /changepassword <old> <new>", NamedTextColor.RED));
+                return;
+            }
+            if (plugin.checkPassword(uuid, args[1])) {
+                plugin.changePassword(uuid, args[2]);
+                player.sendMessage(Component.text("Password updated!", NamedTextColor.GREEN));
+            } else {
+                player.sendMessage(Component.text("Old password is incorrect.", NamedTextColor.RED));
+            }
+        }
+        
+        // 4. BLOCK OTHER COMMANDS IF NOT LOGGED IN
+        else if (shouldBlock(player)) {
+            // Allow /l, /reg aliases if needed, but standardizing to the above is safer
+            if (!cmd.equals("/l") && !cmd.equals("/reg")) {
+                event.setCancelled(true);
+                player.sendMessage(Component.text("Please login first!", NamedTextColor.RED));
+            }
+        }
+    }
+
+    // --- STANDARD SECURITY ---
+
     private boolean shouldBlock(Player player) {
         return !plugin.isLoggedIn(player.getUniqueId());
     }
@@ -30,12 +122,13 @@ public class AuthListener implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        plugin.setLoggedIn(player.getUniqueId(), false); // Always require login on join
+        plugin.setLoggedIn(player.getUniqueId(), false); 
+        plugin.applyBlindness(player); // Apply Blindness
 
         if (plugin.isRegistered(player.getUniqueId())) {
             player.sendMessage(Component.text("Welcome back! Please /login <password>", NamedTextColor.GOLD));
         } else {
-            player.sendMessage(Component.text("Welcome! Please /register <password> <confirm>", NamedTextColor.GOLD));
+            player.sendMessage(Component.text("Welcome! Please /register <password> <password>", NamedTextColor.GOLD));
         }
     }
 
@@ -44,15 +137,11 @@ public class AuthListener implements Listener {
         plugin.removeSession(event.getPlayer().getUniqueId());
     }
 
-    // --- Blockers ---
-
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         if (shouldBlock(event.getPlayer())) {
             Location from = event.getFrom();
             Location to = event.getTo();
-            
-            // Allow rotating head (Yaw/Pitch) but prevent XYZ movement
             if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
                 event.setTo(from);
             }
@@ -64,18 +153,6 @@ public class AuthListener implements Listener {
         if (shouldBlock(event.getPlayer())) {
             event.setCancelled(true);
             event.getPlayer().sendMessage(Component.text("Please login first!", NamedTextColor.RED));
-        }
-    }
-
-    @EventHandler
-    public void onCommand(PlayerCommandPreprocessEvent event) {
-        if (shouldBlock(event.getPlayer())) {
-            String msg = event.getMessage().toLowerCase();
-            // Whitelist specific commands
-            if (!msg.startsWith("/login") && !msg.startsWith("/register") && !msg.startsWith("/l") && !msg.startsWith("/reg")) {
-                event.setCancelled(true);
-                event.getPlayer().sendMessage(Component.text("Please login first!", NamedTextColor.RED));
-            }
         }
     }
 
