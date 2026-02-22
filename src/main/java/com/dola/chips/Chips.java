@@ -4,7 +4,10 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,24 +23,22 @@ public class Chips extends JavaPlugin {
     private File userDataFile;
     private FileConfiguration userData;
     
-    // Stores login status in RAM
     private final HashMap<UUID, Boolean> loggedInPlayers = new HashMap<>();
 
     @Override
     public void onEnable() {
         instance = this;
-        
-        // 1. Create the 'Chips' directory and data.yml
         createUserDataFile();
         
-        // 2. Register Commands
-        getCommand("register").setExecutor(new AuthCommands(this));
-        getCommand("login").setExecutor(new AuthCommands(this));
+        // We only need the Executor for logout. 
+        // Login/Register are handled in AuthListener to hide them from console logs.
         getCommand("logout").setExecutor(new AuthCommands(this));
-        getCommand("changepassword").setExecutor(new AuthCommands(this));
         
-        // 3. Register Security Listeners
+        // Register Security & Command Interceptor
         getServer().getPluginManager().registerEvents(new AuthListener(this), this);
+
+        // Start the 10-second reminder task
+        startReminderTask();
 
         getLogger().info("Chips Auth loaded for Purpur 1.21.11");
     }
@@ -45,6 +46,36 @@ public class Chips extends JavaPlugin {
     @Override
     public void onDisable() {
         saveUserData();
+        // Clean up effects
+        for (Player p : getServer().getOnlinePlayers()) {
+            removeBlindness(p);
+        }
+    }
+
+    // --- 10 Second Reminder Task ---
+    private void startReminderTask() {
+        // Run every 200 ticks (10 seconds)
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            for (Player player : getServer().getOnlinePlayers()) {
+                if (!isLoggedIn(player.getUniqueId())) {
+                    if (isRegistered(player.getUniqueId())) {
+                        player.sendMessage(Component.text("Use /login <password>", NamedTextColor.RED));
+                    } else {
+                        player.sendMessage(Component.text("Use /register <password> <password>", NamedTextColor.RED));
+                    }
+                }
+            }
+        }, 0L, 200L); 
+    }
+
+    // --- Effect Management ---
+    public void applyBlindness(Player player) {
+        // Duration: Infinite, Amplifier: 1, Particles: Hidden
+        player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, PotionEffect.INFINITE_DURATION, 1, false, false));
+    }
+
+    public void removeBlindness(Player player) {
+        player.removePotionEffect(PotionEffectType.BLINDNESS);
     }
 
     // --- Session API ---
@@ -82,7 +113,6 @@ public class Chips extends JavaPlugin {
 
     // --- File System ---
     private void createUserDataFile() {
-        // This ensures the folder is plugins/Chips
         userDataFile = new File(getDataFolder(), "data.yml");
         if (!userDataFile.exists()) {
             userDataFile.getParentFile().mkdirs();
