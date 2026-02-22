@@ -16,6 +16,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.UUID;
+import java.util.logging.Filter;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 public class Chips extends JavaPlugin {
 
@@ -28,25 +31,30 @@ public class Chips extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
+        
+        // --- 1. SETUP CONSOLE FILTER (Hides passwords) ---
+        Logger.getLogger("").setFilter(new PasswordFilter());
+
+        // --- 2. SETUP FILES ---
         createUserDataFile();
         
-        // We only need the Executor for logout. 
-        // Login/Register are handled in AuthListener to hide them from console logs.
+        // --- 3. REGISTER COMMANDS ---
+        // We only register logout here. Login/Register are handled in Listener to be safe.
         getCommand("logout").setExecutor(new AuthCommands(this));
         
-        // Register Security & Command Interceptor
+        // --- 4. REGISTER EVENTS ---
         getServer().getPluginManager().registerEvents(new AuthListener(this), this);
 
-        // Start the 10-second reminder task
+        // --- 5. TASKS ---
         startReminderTask();
 
-        getLogger().info("Chips Auth loaded for Purpur 1.21.11");
+        getLogger().info("Chips Auth loaded. Passwords are now hidden from console.");
     }
 
     @Override
     public void onDisable() {
         saveUserData();
-        // Clean up effects
+        // Remove effects
         for (Player p : getServer().getOnlinePlayers()) {
             removeBlindness(p);
         }
@@ -54,7 +62,6 @@ public class Chips extends JavaPlugin {
 
     // --- 10 Second Reminder Task ---
     private void startReminderTask() {
-        // Run every 200 ticks (10 seconds)
         getServer().getScheduler().runTaskTimer(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 if (!isLoggedIn(player.getUniqueId())) {
@@ -70,7 +77,6 @@ public class Chips extends JavaPlugin {
 
     // --- Effect Management ---
     public void applyBlindness(Player player) {
-        // Duration: Infinite, Amplifier: 1, Particles: Hidden
         player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, PotionEffect.INFINITE_DURATION, 1, false, false));
     }
 
@@ -154,6 +160,28 @@ public class Chips extends JavaPlugin {
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
             return null;
+        }
+    }
+    
+    // --- CONSOLE FILTER CLASS ---
+    // This blocks the "issued server command" line for auth commands
+    public static class PasswordFilter implements Filter {
+        @Override
+        public boolean isLoggable(LogRecord record) {
+            String message = record.getMessage();
+            if (message == null) return true;
+            
+            // Convert to lower case for checking
+            String lower = message.toLowerCase();
+            
+            // If it's a command log
+            if (lower.contains("issued server command")) {
+                // If it contains our sensitive commands, BLOCK IT (return false)
+                if (lower.contains("/login") || lower.contains("/register") || lower.contains("/changepassword")) {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 }
