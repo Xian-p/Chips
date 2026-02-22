@@ -1,42 +1,35 @@
-# Name of the workflow (displayed in GitHub Actions tab)
 name: Build Chips Plugin
 
-# Trigger the workflow on:
-# - Pushes to any branch
-# - Pull requests targeting the main branch
 on:
   push:
-    branches: ['*']
+    branches: [ "master", "main" ]
   pull_request:
-    branches: ['main']
+    branches: [ "master", "main" ]
 
-# Define the build job
 jobs:
   build:
-    # Run on the latest Ubuntu server
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the code from the repository
-      - name: Checkout Code
+      # 1. Check out the code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Set up Java (matches Paper 1.21.11's required version)
-      - name: Set Up Java
+      # 2. Set up Java 21 (Required for Purpur 1.21.1)
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'  # Paper 1.21.11 requires Java 21
+          java-version: '21'
           distribution: 'temurin'
-          cache: 'maven'      # Cache Maven dependencies to speed up builds
+          cache: maven
 
-      # Step 3: Build the plugin with Maven
+      # 3. Build the JAR using Maven
       - name: Build with Maven
-        run: mvn clean package -B  # "-B" runs Maven in batch mode (no interactive prompts)
+        run: mvn -B clean package --file pom.xml
 
-      # Step 4: Upload the compiled JAR as an artifact (for easy download)
-      - name: Upload Build Artifact
+      # 4. Upload the JAR so you can download it
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Chips-Plugin
-          path: target/Chips.jar  # Path to the final built JAR
-          
+          path: target/*.jar
